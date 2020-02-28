@@ -1,0 +1,45 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<groupId>ie.nuigalway.jcesca</groupId>
+	<artifactId>azure-image-uploader</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<name>azure-image-uploader</name>
+
+	<properties>
+		<maven.compiler.source>1.8</maven.compiler.source>
+		<maven.compiler.target>1.8</maven.compiler.target>
+	</properties>
+
+	<dependencies>
+		<!-- https://mvnrepository.com/artifact/com.microsoft.azure.cognitiveservices/azure-cognitiveservices-customvision-training -->
+		<dependency>
+			<groupId>com.azure</groupId>
+			<artifactId>azure-cognitiveservices-customvision-training</artifactId>
+			<version>1.1.0-preview.2</version>
+		</dependency>
+
+		<!-- https://mvnrepository.com/artifact/com.microsoft.azure.cognitiveservices/azure-cognitiveservices-customvision-prediction -->
+		<dependency>
+			<groupId>com.azure</groupId>
+			<artifactId>azure-cognitiveservices-customvision-prediction</artifactId>
+			<version>1.1.0-preview.2</version>
+		</dependency>
+
+		<!-- https://mvnrepository.com/artifact/org.slf4j/slf4j-simple -->
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-simple</artifactId>
+			<version>1.7.5</version>
+		</dependency>
+
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-api</artifactId>
+			<version>1.7.5</version>
+		</dependency>
+
+	</dependencies>
+
+</project>
