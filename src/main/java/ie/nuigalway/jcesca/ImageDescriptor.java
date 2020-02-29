@@ -43,7 +43,6 @@ public class ImageDescriptor {
 			
 
 			int numObjects = doc.getElementsByTagName("object").getLength();
-			System.out.println("Amount of objects: " + numObjects);
 			for (int i = 0; i < numObjects; i++) {
 				ObjectTag tag = new ObjectTag();
 
