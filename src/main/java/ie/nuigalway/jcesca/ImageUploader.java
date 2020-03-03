@@ -78,9 +78,8 @@ public class ImageUploader {
 		// Create a Project on Azure (customvision.ai)
 		logger.info("Creating project...");
 		this.project = this.trainerClient.createProject().withName(projectName) // Project Name
-				.withDescription(projectDescription).withDomainId(getObjectDetectionDomain().id()) // With Object
-																									// Detection Domain
-																									// set
+				.withDescription(projectDescription)
+				.withDomainId(getObjectDetectionDomain().id()) // With Object Detection Domain set
 				.withClassificationType(Classifier.MULTILABEL.toString()).execute();
 		
 		// TODO: check why using MULTILABEL
