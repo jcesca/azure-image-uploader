@@ -1,4 +1,4 @@
-package ie.nuigalway.jcesca;
+package ie.nuigalway.jcesca.ie.nuigalway.jcesca;
 
 public class ObjectTag {
 
@@ -47,6 +47,11 @@ public class ObjectTag {
 
 	public void setName(String name) {
 		this.name = name;
+	}
+	
+	public String toString() {
+		return name + ": (" + xmin + ", " + ymin + ")-(" + xmax + ", " + ymax + ")";
+		
 	}
 
 }

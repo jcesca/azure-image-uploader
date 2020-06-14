@@ -1,4 +1,4 @@
-package ie.nuigalway.jcesca;
+package ie.nuigalway.jcesca.ie.nuigalway.jcesca;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.DocumentBuilder;
