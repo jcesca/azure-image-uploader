@@ -34,6 +34,8 @@ public class ImageDescriptor {
 			// File Name
 			NodeList nListFilename = doc.getElementsByTagName("filename");
 			String tmpFileName = nListFilename.item(0).getTextContent();
+
+			// Workaround to renamed files
 			this.fileName = xmlFileName.substring(0, xmlFileName.length() - 3) + tmpFileName.substring(tmpFileName.length()-3);
 
 			// Picture Size
@@ -50,21 +52,20 @@ public class ImageDescriptor {
 				Element currentObject = (Element) doc.getElementsByTagName("object").item(i);
 				
 				// Area
-				// The xml file provided uses a different notation and has some flaws
-				// - The notation used is considering the object area as pixels, while Azure
-				// uses a double value from 0 (min) to 1 (max). This is why it's being divided
-				// by width and height
-				// - The YMin and YMax are inverted (on the xml YMin is always higher than YMax
+				// The XML file provided uses PASCAL VOC format uses the absolute value (pixel size) 
+				// Azure uses a relative value from 0 (min) to 1 (max). This is why it's being divided by width and height
+				// The YMin and YMax are inverted (on the UNITY 3D XML file YMin is always higher than YMax)
 				
 				tag.setName(currentObject.getElementsByTagName("name").item(0).getTextContent());
 
+				//Conversion from PASCAL VOC FORMAT to Azure format
 				tag.setXmin(Double.parseDouble(currentObject.getElementsByTagName("xmin").item(0).getTextContent()) / width);
 				tag.setXmax(Double.parseDouble(currentObject.getElementsByTagName("xmax").item(0).getTextContent()) / width);
 				
 				double ymin = Double.parseDouble(currentObject.getElementsByTagName("ymin").item(0).getTextContent()) / height;
 				double ymax = Double.parseDouble(currentObject.getElementsByTagName("ymax").item(0).getTextContent()) / height;
 						
-				// At the XML YMin and YMax are inverted
+				// Unity 3D XML file YMin and YMax are inverted
 				if (ymin > ymax) {
 					tag.setYmin(ymax); 
 					tag.setYmax(ymin); 				

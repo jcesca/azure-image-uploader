@@ -5,9 +5,11 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.FilenameFilter;
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.nio.file.Files;
 import java.text.NumberFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -47,9 +49,9 @@ public class ImageUploader {
 	private ArrayList<ImageFileCreateEntry> imgList = new ArrayList<ImageFileCreateEntry>();
 	private Iteration iteration = null;
 	private final int maxUploadBatchSize = 20;
-	private double TP;
-	private double FP;
-	private double FN;
+	/*
+	 * private double TP; private double FP; private double FN;
+	 */
 
 	public ImageUploader() {
 		this.logger = LoggerFactory.getLogger(ImageUploader.class);
@@ -97,13 +99,10 @@ public class ImageUploader {
 																									// set
 				.withClassificationType(Classifier.MULTILABEL.toString()).execute();
 
-		// TODO: check why using MULTILABEL
-
 		// Store the tagList
 		this.tagList = this.trainerClient.getTags().withProjectId(this.project.id()).execute();
 
 		logger.info("Project " + projectName + " created with ID: " + this.project.id());
-
 	}
 
 	/**
@@ -162,20 +161,26 @@ public class ImageUploader {
 	 * Load images from Files into Azure
 	 */
 	public void loadImagesFromFiles(String directory) {
+		// List all XMLs
 		File[] xmlList = listAllXMLs(directory);
 
+		// Batch counter (for logging only)
 		int batch = 1;
+		
+		// Load Images to batch Array
 		for (File f : xmlList) {
 			ImageDescriptor imgDesc = new ImageDescriptor(directory, f.getName());
 			addImageToList(imgDesc);
 			if (imgList.size() == maxUploadBatchSize) {
 				logger.info("Uploading Batch: " + batch);
+				// Add images to Project
 				addImageListToProject();
 				imgList = new ArrayList<ImageFileCreateEntry>();
 				batch++;
 			}
 		}
 		if (imgList.size() > 0) {
+			// Finally, add any remaining images to the project 
 			logger.info("Uploading Batch: " + batch);
 			addImageListToProject();
 		}
@@ -234,14 +239,14 @@ public class ImageUploader {
 	public void train(String modelName) {
 		logger.info("Training Started!");
 		this.iteration = trainerClient.trainProject(this.project.id(), new TrainProjectOptionalParameter());
-		while (this.iteration.status().equals("Training")) {
-			logger.info("Training Status: " + this.iteration.status());
-			try {
+		try {
+			while (this.iteration.status().equals("Training")) {
+				logger.info("Training Status: " + this.iteration.status());
 				Thread.sleep(5000);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
+				this.iteration = trainerClient.getIteration(this.project.id(), this.iteration.id());
 			}
-			this.iteration = trainerClient.getIteration(this.project.id(), this.iteration.id());
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
 
 		logger.info("Training Status: " + this.iteration.status());
@@ -267,74 +272,335 @@ public class ImageUploader {
 		final File folder = new File(dir);
 		File[] files = folder.listFiles();
 
+		ArrayList<PredictionOfImage> imgPredList = new ArrayList<PredictionOfImage>();
+
 		for (File file : files) {
-			if (!file.getName().endsWith(".xml")) {
-				String xmlName = file.getName().substring(0, file.getName().length() - 3) + "xml";
-				logger.info("XML: " + xmlName);
+
+			String fileName = file.getName();
+
+			if (!fileName.endsWith(".xml")) {
+				logger.info("Uploading Test File: " + fileName);
+
+				String fileNameNoExtension = fileName.substring(0, fileName.length() - 4);
+				String xmlName = fileNameNoExtension + ".xml";
 				ImageDescriptor imgDesc = new ImageDescriptor(dir, xmlName);
 
 				try {
 					// logger.info("Uploading" + file.getName());
 					byte[] testImage = Files.readAllBytes(file.toPath());
 
-					ImagePrediction results = this.predictClient.predictions().detectImage()
+					ImagePrediction predictions = this.predictClient.predictions().detectImage()
 							.withProjectId(this.project.id()).withPublishedName(modelName).withImageData(testImage)
 							.execute();
 
-					logger.info("Uploaded " + file.getName() + " - " + results.predictions().size() + " predictions.");
-					boolean foundPredictionAboveTreshold = false;
+					PredictionOfImage predImage = new PredictionOfImage(file, predictions, imgDesc);
 
-					for (Prediction p : results.predictions()) {
-						double probability = p.probability();
-						if (probability >= .15) {
-							foundPredictionAboveTreshold = true;
+					imgPredList.add(predImage);
 
-							double LeftA = p.boundingBox().left();
-							double TopA = p.boundingBox().top();
-							double RightA = p.boundingBox().left() + p.boundingBox().width();
-							double BottomA = p.boundingBox().top() + p.boundingBox().height();
-
-							Box boxA = new Box(TopA, BottomA, LeftA, RightA);
-
-							for (ObjectTag t : imgDesc.getTagList()) {
-								// logger.info(t.toString());
-								double LeftB = t.getXmin();
-								double TopB = t.getYmin();
-								double RightB = t.getXmax();
-								double BottomB = t.getYmax();
-
-								Box boxB = new Box(TopB, BottomB, LeftB, RightB);
-								double IoU = boxA.getIoU(boxB);
-								this.processIoU(IoU);
-
-								logger.info(p.tagName() + ": " + (probability * 100) + "% " + boxA + " Area: "
-										+ boxA.getArea() + " Overlap: " + boxA.doOverlap(boxB) + " iArea: "
-										+ boxA.getIntersectionArea(boxB) + " IoU: " + IoU);
-							}
-						}
-
-					}
-					
-					if (!foundPredictionAboveTreshold) {
-						this.FN++;
-					}
-
+					logger.info(
+							"Uploaded " + file.getName() + " - " + predictions.predictions().size() + " predictions.");
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
-
 			}
 		}
 
+		validateAllThresholds(imgPredList, modelName);
+
 	}
 
-	public void processIoU(double IoU) {
-		if (IoU >= .5) {
-			this.TP++;
-		} else {
-			this.FP++;
+	public void validateAllThresholds(ArrayList<PredictionOfImage> imgPredList, String modelName) {
+		for (double confidenceThreshold = .1; confidenceThreshold < 1; confidenceThreshold = confidenceThreshold + .1) {
+			calculateMetrics(imgPredList, confidenceThreshold, modelName);
 		}
 	}
+
+	public void uploadTestImages_old(String dir, String modelName) {
+		logger.info("Uploading Test Images");
+
+		logger.info("Source: " + dir);
+		final File folder = new File(dir);
+		File[] files = folder.listFiles();
+
+		ArrayList<PredictionOfImage> imgPredList = new ArrayList<PredictionOfImage>();
+
+		for (File file : files) {
+
+			String fileName = file.getName();
+
+			if (!fileName.endsWith(".xml")) {
+				logger.info("Uploading Test File: " + fileName);
+
+				String fileNameNoExtension = fileName.substring(0, fileName.length() - 4);
+				String xmlName = fileNameNoExtension + ".xml";
+				ImageDescriptor imgDesc = new ImageDescriptor(dir, xmlName);
+
+				try {
+					// logger.info("Uploading" + file.getName());
+					byte[] testImage = Files.readAllBytes(file.toPath());
+
+					ImagePrediction predictions = this.predictClient.predictions().detectImage()
+							.withProjectId(this.project.id()).withPublishedName(modelName).withImageData(testImage)
+							.execute();
+
+					PredictionOfImage predImage = new PredictionOfImage(file, predictions, imgDesc);
+
+					imgPredList.add(predImage);
+
+					logger.info(
+							"Uploaded " + file.getName() + " - " + predictions.predictions().size() + " predictions.");
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+
+		for (double threshold = .1; threshold < 1; threshold = threshold + .1) {
+
+			double TP = 0;
+			double FP = 0;
+			double FN = 0;
+
+			// For each image
+			for (PredictionOfImage predImage : imgPredList) {
+				ImageDescriptor imgDesc = predImage.getImageDescriptor();
+
+				// For each Prediction
+				for (Prediction p : predImage.getPredictions().predictions()) {
+					double probability = p.probability();
+
+					// For each prediction with an acceptable probability
+					if (probability >= threshold) {
+
+						double predLeft = p.boundingBox().left();
+						double predTop = p.boundingBox().top();
+						double predRight = p.boundingBox().left() + p.boundingBox().width();
+						double predBottom = p.boundingBox().top() + p.boundingBox().height();
+
+						Box predBox = new Box(predTop, predBottom, predLeft, predRight);
+
+						// For each True Tag
+						for (ObjectTag t : imgDesc.getTagList()) {
+
+							double trueLeft = t.getXmin();
+							double trueTop = t.getYmin();
+							double trueRight = t.getXmax();
+							double trueBottom = t.getYmax();
+
+							Box trueBox = new Box(trueTop, trueBottom, trueLeft, trueRight);
+
+							double IoU = predBox.getIoU(trueBox);
+							if (IoU > 0.5) {
+								// True Detection
+								TP++;
+							} else {
+								// False Detection
+								FP++;
+							}
+
+						}
+
+					} else {
+						// False detection, below confidence threshold
+						FP++;
+					}
+				}
+
+				// Find False Negatives
+				// For each tag
+				for (ObjectTag t : imgDesc.getTagList()) {
+					boolean detectedTag = false;
+
+					double trueLeft = t.getXmin();
+					double trueTop = t.getYmin();
+					double trueRight = t.getXmax();
+					double trueBottom = t.getYmax();
+
+					Box trueBox = new Box(trueTop, trueBottom, trueLeft, trueRight);
+
+					for (Prediction p : predImage.getPredictions().predictions()) {
+						double probability = p.probability();
+
+						// For each prediction with an acceptable probability
+						if (probability >= threshold) {
+
+							double predLeft = p.boundingBox().left();
+							double predTop = p.boundingBox().top();
+							double predRight = p.boundingBox().left() + p.boundingBox().width();
+							double predBottom = p.boundingBox().top() + p.boundingBox().height();
+
+							Box predBox = new Box(predTop, predBottom, predLeft, predRight);
+
+							double IoU = predBox.getIoU(trueBox);
+
+							if (IoU > .5) {
+								detectedTag = true;
+							}
+
+						}
+					}
+
+					if (!detectedTag) {
+						// False negative (true tag not detected)
+						FN++;
+					}
+
+				}
+
+			}
+			saveMetricsByModel(modelName, threshold, TP, FP, FN);
+		}
+
+	}
+
+	public void calculateMetrics(ArrayList<PredictionOfImage> imgPredList, double confidenceThreshold,
+			String modelName) {
+
+		/*
+		 * How predictions work: - When multiple boxes detect the same object, the box
+		 * with the highest IoU is considered TP, while the remaining boxes are
+		 * considered FP. - If the object is present and the predicted box has an IoU <
+		 * threshold with ground truth box, The prediction is considered FP. More
+		 * importantly, because no box detected it properly, the class object receives
+		 * FN, . - If the object is not in the image, yet the model detects one then the
+		 * prediction is considered FP. - Recall and precision are then computed for
+		 * each class by applying the above-mentioned formulas, where predictions of TP,
+		 * FP and FN are accumulated.
+		 */
+		int TP = 0; // True Positive - correct detection of an existing object with IoU above
+					// threshold (highest IoU only)
+		int FP = 0; // False Positive - correct detection below IoU threshold or a detection of an
+					// area that doesn't belong to an object
+		int FN = 0; // False Negative - non-detection of an existing object
+		double IoUThreshold = .5;
+
+		// For each image
+		for (PredictionOfImage imgPred : imgPredList) {
+			ImageDescriptor imgDesc = imgPred.getImageDescriptor();
+			ImagePrediction predList = imgPred.getPredictions();
+
+			// When multiple boxes detect the same object, the box with the highest IoU is
+			// considered TP, while the remaining boxes are considered FP.
+
+			for (ObjectTag t : imgDesc.getTagList()) {
+				Box trueBox = t.getBox();
+
+				double bestIoU = 0;
+
+				for (Prediction p : predList.predictions()) {
+					if (p.probability() >= confidenceThreshold) {
+
+						Box predBox = Box.getBox(p);
+
+						double IoU = trueBox.getIoU(predBox);
+
+						if (IoU > 0) {
+							if (IoU > IoUThreshold) {
+								if (bestIoU == 0) {
+									bestIoU = IoU; // First detection that found the right object
+								} else if (IoU > bestIoU) {
+									bestIoU = IoU; // Change to a better detection
+									FP++; // while the remaining boxes are considered FP.
+								}
+
+							} else {
+								FP++; // Object detected with an IoU below the threshold
+							}
+
+						}
+
+					}
+				}
+
+				if (bestIoU == 0) {
+					// Object was not found
+					FN++;
+				} else {
+					// There was one good detection
+					TP++;
+				}
+			}
+
+			// False Negatives where there is a prediction on an area without any object.
+
+			for (Prediction p : predList.predictions()) {
+				if (p.probability() >= confidenceThreshold) {
+					Box predBox = Box.getBox(p);
+					boolean hasIntersection = false;
+					for (ObjectTag t : imgDesc.getTagList()) {
+						Box trueBox = t.getBox();
+						double IoU = trueBox.getIoU(predBox);
+						if (IoU > 0) {
+							hasIntersection = true;
+						}
+					}
+					if (!hasIntersection) {
+						// False detection. There is a prediction on an area without any object
+						FP++;
+					}
+				}
+			}
+		}
+
+		saveMetricsByModel(modelName, confidenceThreshold, TP, FP, FN);
+	}
+
+	/*
+	 * public void uploadTestImages_new(String dir, String modelName) {
+	 * logger.info("Uploading Test Images");
+	 * 
+	 * logger.info("Source: " + dir); final File folder = new File(dir); File[]
+	 * files = folder.listFiles();
+	 * 
+	 * for (File file : files) { if (!file.getName().endsWith(".xml")) {
+	 * 
+	 * // Load Test Image True tags from XML String xmlName =
+	 * file.getName().substring(0, file.getName().length() - 3) + "xml"; String
+	 * fileNameNoExtension = xmlName.substring(0, xmlName.length() - 4);
+	 * logger.info("XML: " + xmlName); logger.info("NoExtensionName: " +
+	 * fileNameNoExtension); ImageDescriptor imgDesc = new ImageDescriptor(dir,
+	 * xmlName);
+	 * 
+	 * for (ObjectTag t : imgDesc.getTagList()) { // True tag box from Test Image
+	 * XML double LeftB = t.getXmin(); double TopB = t.getYmin(); double RightB =
+	 * t.getXmax(); double BottomB = t.getYmax(); Box boxB = new Box(TopB, BottomB,
+	 * LeftB, RightB);
+	 * 
+	 * // Upload test image to Azure and collect predictions as results byte[]
+	 * testImage; try { testImage = Files.readAllBytes(file.toPath());
+	 * ImagePrediction results = this.predictClient.predictions().detectImage()
+	 * .withProjectId(this.project.id()).withPublishedName(modelName).withImageData(
+	 * testImage) .execute();
+	 * 
+	 * // Iterate through predictions if (results.predictions().size() > 0) { for
+	 * (Prediction p : results.predictions()) { double probability =
+	 * p.probability(); double LeftA = p.boundingBox().left(); double TopA =
+	 * p.boundingBox().top(); double RightA = p.boundingBox().left() +
+	 * p.boundingBox().width(); double BottomA = p.boundingBox().top() +
+	 * p.boundingBox().height();
+	 * 
+	 * Box boxA = new Box(TopA, BottomA, LeftA, RightA); double IoU =
+	 * boxA.getIoU(boxB); saveModelDetailedMetrics(modelName, fileNameNoExtension,
+	 * boxB, p, true, IoU, probability); }
+	 * 
+	 * } else { // FN saveModelDetailedMetrics(modelName, fileNameNoExtension, boxB,
+	 * null, false, 0, 0); }
+	 * 
+	 * } catch (IOException e) { // TODO Auto-generated catch block
+	 * e.printStackTrace(); }
+	 * 
+	 * 
+	 * }
+	 * 
+	 * } }
+	 * 
+	 * }
+	 */
+
+	/*
+	 * public void processIoU(double IoU) { if (IoU >= .5) { this.TP++; } else {
+	 * this.FP++; } }
+	 */
 
 	public void unpublishModel() {
 		logger.info("Unpublishing Iteration...");
@@ -354,49 +620,85 @@ public class ImageUploader {
 		logger.info("mAP: " + ip.averagePrecision());
 	}
 
-	public void printMetrics() {
-		logger.info("Model Metrics:");
-		logger.info("TP: " + this.TP);
-		logger.info("FP: " + this.FP);
-		logger.info("FN: " + this.FN);
-		logger.info("Accuracy: " + this.getAccuracy());
-		logger.info("Precision: " + this.getPrecision());
-		logger.info("Recall: " + this.getRecall());
-	}
+	/*
+	 * public void printMetrics() { logger.info("Model Metrics:");
+	 * logger.info("TP: " + this.TP); logger.info("FP: " + this.FP);
+	 * logger.info("FN: " + this.FN); logger.info("Accuracy: " +
+	 * this.getAccuracy()); logger.info("Precision: " + this.getPrecision());
+	 * logger.info("Recall: " + this.getRecall()); }
+	 * 
+	 * public String getMetrics(String modelName) { IterationPerformance ip =
+	 * trainerClient.getIterationPerformance(project.id(), iteration.id(), new
+	 * GetIterationPerformanceOptionalParameter()); return modelName + ", " +
+	 * this.TP + ", " + this.FP + ", " + this.FN + ", " + this.getAccuracy() + ", "
+	 * + this.getPrecision() + ", " + this.getRecall() + ", " + ip.precision() +
+	 * ", " + ip.recall() + ", " + ip.averagePrecision(); }
+	 */
 
-	public String getMetrics(String modelName) {
-		IterationPerformance ip = trainerClient.getIterationPerformance(project.id(), iteration.id(),
-				new GetIterationPerformanceOptionalParameter());
-		return modelName + ", " + this.TP + ", " + this.FP + ", " + this.FN + ", " + this.getAccuracy() + ", "
-				+ this.getPrecision() + ", " + this.getRecall() + ", " + ip.precision() + ", " + ip.recall() + ", "
-				+ ip.averagePrecision();
-	}
-
-	public void saveMetrics(String modelName) {
+	/*
+	 * public void saveModelDetailedMetrics(String modelName, String imageName, Box
+	 * trueBox, Prediction prediction, boolean found, double IoU, double
+	 * probability) { logger.info("Writing to file.."); BufferedWriter writer; //
+	 * Get build the content using collected data StringBuilder content = new
+	 * StringBuilder(); content.append(modelName + ", "); content.append(imageName +
+	 * ", "); content.append(trueBox.hashCode() + ", ");
+	 * content.append(prediction.hashCode() + ", "); content.append(found + ", ");
+	 * content.append(IoU + ", "); content.append(probability);
+	 * 
+	 * try { writer = new BufferedWriter(new FileWriter(modelName + ".txt", true));
+	 * writer.newLine(); // Add new line writer.write(content.toString());
+	 * writer.close(); } catch (IOException e) { // TODO Auto-generated catch block
+	 * e.printStackTrace(); }
+	 * 
+	 * }
+	 */
+	public void saveMetricsByModel(String modelName, double threshold, double tp, double fp, double fn) {
 
 		logger.info("Writing to file..");
+
+		double accuracy = ((tp) / (tp + fp + fn));
+		double precision = ((tp) / (tp + fp));
+		double recall = ((tp) / (tp + fn));
+		double fOneScore = (2 * (precision * recall) / (precision + recall));
+
+		StringBuilder metrics = new StringBuilder();
+		metrics.append(threshold + ",");
+		metrics.append(fp + ",");
+		metrics.append(tp + ",");
+		metrics.append(fn + ",");
+		metrics.append(accuracy + ",");
+		metrics.append(recall + ",");
+		metrics.append(precision + ",");
+		metrics.append(fOneScore);
+		metrics.append("\r\n");
+
 		BufferedWriter writer;
 		try {
-			writer = new BufferedWriter(new FileWriter("metrics.txt", true) // Set true for append mode
+			writer = new BufferedWriter(new FileWriter(modelName + ".txt", true) // Set true for append mode
 			);
-			writer.newLine(); // Add new line
-			writer.write(this.getMetrics(modelName));
+			writer.write(metrics.toString());
 			writer.close();
+			logger.info(metrics.toString());
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
 
-	public double getAccuracy() {
-		return (TP / (TP + FP + FN));
-	}
-
-	public double getPrecision() {
-		return (TP / (TP + FP));
-	}
-
-	public double getRecall() {
-		return (TP / (TP + FN));
-	}
+	/*
+	 * public void saveMetrics(String modelName) {
+	 * 
+	 * logger.info("Writing to file.."); BufferedWriter writer; try { writer = new
+	 * BufferedWriter(new FileWriter("metrics.txt", true) // Set true for append
+	 * mode ); writer.newLine(); // Add new line
+	 * writer.write(this.getMetrics(modelName)); writer.close(); } catch
+	 * (IOException e) { // TODO Auto-generated catch block e.printStackTrace(); } }
+	 */
+	/*
+	 * public double getAccuracy() { return (TP / (TP + FP + FN)); }
+	 * 
+	 * public double getPrecision() { return (TP / (TP + FP)); }
+	 * 
+	 * public double getRecall() { return (TP / (TP + FN)); }
+	 */
 }

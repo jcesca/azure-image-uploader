@@ -3,6 +3,8 @@ package ie.nuigalway.jcesca.ie.nuigalway.jcesca;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.microsoft.azure.cognitiveservices.vision.customvision.prediction.models.Prediction;
+
 public class Box {
 
 	private double top, bottom, left, right = 0;
@@ -14,6 +16,14 @@ public class Box {
 		this.left = left;
 		this.right = right;
 		this.logger = LoggerFactory.getLogger(Box.class);
+	}
+	
+	public static Box getBox(Prediction p) {
+		double predLeft = p.boundingBox().left();
+		double predTop = p.boundingBox().top();
+		double predRight = p.boundingBox().left() + p.boundingBox().width();
+		double predBottom = p.boundingBox().top() + p.boundingBox().height();
+		return new Box(predTop, predBottom, predLeft, predRight);
 	}
 
 	public double getTop() {

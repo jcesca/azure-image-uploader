@@ -53,5 +53,9 @@ public class ObjectTag {
 		return name + ": (" + xmin + ", " + ymin + ")-(" + xmax + ", " + ymax + ")";
 		
 	}
+	
+	public Box getBox() {
+		return new Box(this.ymin, this.ymax, this.xmin, this.xmax);
+	}
 
 }

@@ -28,13 +28,14 @@ public class Application {
 		final String baseDir = System.getenv("IMAGES_DIR");
 		final String testDir = System.getenv("IMAGE_TEST_DIR");
 
-/*		String groups[] = { "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K25", "K50", "K75", "L1000", "L2000",
-				"L3000", "L4000" };*/
-		String groups[] = {"B", "C", "D", "E", "F", "G", "H", "I", "J", "K25", "K50", "K75", "L1000", "L2000",
-				"L3000", "L4000" };
+		/*
+		 * String groups[] = { "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K25",
+		 * "K50", "K75", "L1000", "L2000", "L3000", "L4000" };
+		 */
+		String groups[] = { "L1000", "L2000", "L3000", "L4000" };
 
-		//String groups[] = { "A"};
-		
+		// String groups[] = { "A"};
+
 		// Variables for Project Name and Description
 		String projectName = "ALIVE_Validation";
 		String projectDescription = "ALIVE Project Validation";
@@ -58,16 +59,34 @@ public class Application {
 			// String projectId = "8d0c381f-d738-4625-b93b-deb1ed8f2d71";
 			// uploader.loadProjectById(projectId);
 
-			uploader.uploadTestImages(testDir, modelName);
-			uploader.printMetrics();
+			// uploader.uploadTestImages(testDir, modelName);
+			// uploader.printMetrics();
 
-			uploader.saveMetrics(modelName);
+			// uploader.saveMetrics(modelName);
 			uploader.unpublishModel();
 			uploader.deleteProject();
 			logger.info("Finishing group " + g);
 		}
 
 		logger.info("FINISHED!");
+
+		System.out.println(
+				"DDDDDDDDDDDDD             OOOOOOOOO     NNNNNNNN        NNNNNNNNEEEEEEEEEEEEEEEEEEEEEE      !!!       !!! \n"
+						+ "D::::::::::::DDD        OO:::::::::OO   N:::::::N       N::::::NE::::::::::::::::::::E     !!:!!     !!:!!\n"
+						+ "D:::::::::::::::DD    OO:::::::::::::OO N::::::::N      N::::::NE::::::::::::::::::::E     !:::!     !:::!\n"
+						+ "DDD:::::DDDDD:::::D  O:::::::OOO:::::::ON:::::::::N     N::::::NEE::::::EEEEEEEEE::::E     !:::!     !:::!\n"
+						+ "  D:::::D    D:::::D O::::::O   O::::::ON::::::::::N    N::::::N  E:::::E       EEEEEE     !:::!     !:::!\n"
+						+ "  D:::::D     D:::::DO:::::O     O:::::ON:::::::::::N   N::::::N  E:::::E                  !:::!     !:::!\n"
+						+ "  D:::::D     D:::::DO:::::O     O:::::ON:::::::N::::N  N::::::N  E::::::EEEEEEEEEE        !:::!     !:::!\n"
+						+ "  D:::::D     D:::::DO:::::O     O:::::ON::::::N N::::N N::::::N  E:::::::::::::::E        !:::!     !:::!\n"
+						+ "  D:::::D     D:::::DO:::::O     O:::::ON::::::N  N::::N:::::::N  E:::::::::::::::E        !:::!     !:::!\n"
+						+ "  D:::::D     D:::::DO:::::O     O:::::ON::::::N   N:::::::::::N  E::::::EEEEEEEEEE        !:::!     !:::!\n"
+						+ "  D:::::D     D:::::DO:::::O     O:::::ON::::::N    N::::::::::N  E:::::E                  !!:!!     !!:!!\n"
+						+ "  D:::::D    D:::::D O::::::O   O::::::ON::::::N     N:::::::::N  E:::::E       EEEEEE      !!!       !!! \n"
+						+ "DDD:::::DDDDD:::::D  O:::::::OOO:::::::ON::::::N      N::::::::NEE::::::EEEEEEEE:::::E                    \n"
+						+ "D:::::::::::::::DD    OO:::::::::::::OO N::::::N       N:::::::NE::::::::::::::::::::E      !!!       !!! \n"
+						+ "D::::::::::::DDD        OO:::::::::OO   N::::::N        N::::::NE::::::::::::::::::::E     !!:!!     !!:!!\n"
+						+ "DDDDDDDDDDDDD             OOOOOOOOO     NNNNNNNN         NNNNNNNEEEEEEEEEEEEEEEEEEEEEE      !!!       !!! ");
 	}
 
 }
